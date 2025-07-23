@@ -152,6 +152,9 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation project(':react-native-bluetooth-escpos-printer')
 
+    def hermesEnabled = (findProperty('expo.jsEngine') ?: "hermes") == "hermes"
+
+
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";

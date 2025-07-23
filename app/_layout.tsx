@@ -22,7 +22,7 @@ export const routes = {
   loginAdmin: "/login/admin",
   loginConductor: "/login/conductor",
   adminDashboard: "/dashboard/admindashboard",
-  conductorDashboard: "/dashboard/conductordashboard1",
+  conductorDashboard: "/dashboard/conductordashboard",
   addConductor: "/admin/add-conductor",
   viewConductor: "/admin/view-conductor",
   addBus: "/admin/add-bus",

@@ -2,6 +2,7 @@
 
 // ConductorDashboardScreen.tsx
 import React, { useEffect, useState } from "react";
+
 import {
   View,
   StyleSheet,
@@ -22,17 +23,11 @@ import moment from "moment";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
-import { BASE_URL } from "../constants/baseURL";
+import { BASE_URL } from "../../app/constants/baseURL";
 import { router } from "expo-router";
 import { getStatusBarHeight } from "react-native-status-bar-height";
-import {
-  requestBluetoothPermissions,
-  listBluetoothDevices,
-  connectToPrinter,
-  printTicket,
-} from "../../bluetoothPrinterHelper";
 
-export default function ConductorDashboard () {
+export default function ConductorDashboardScreen() {
   const navigation = useNavigation();
   const statusBarHeight = getStatusBarHeight();
   const [companyName, setCompanyName] = useState("");
@@ -173,41 +168,84 @@ export default function ConductorDashboard () {
   };
 
   const handlePrint = async () => {
-  if (!fare || !gstFare) return Alert.alert("Error", "Calculate fare first");
-
-  try {
-    const granted = await requestBluetoothPermissions();
-    if (!granted) return Alert.alert("Permission Denied", "Bluetooth permission is required");
-
-    const devices = await listBluetoothDevices();
-    const paired = JSON.parse(devices.found || "[]");
-    if (!paired.length) return Alert.alert("No Devices", "No paired printers found");
-
-    const printer = paired[0]; // You can allow selection too
-    await connectToPrinter(printer.address);
+    if (!fare || !gstFare) return Alert.alert("Error", "Calculate fare first");
 
     const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
-    const ticketText = `
-*** ${companyName} ***
-Ticket #: ${ticketNumber}
-Bus No: ${conductor?.busnumber}
-From: ${from}
-To: ${to}
-Passengers: ${passengerCount}
-Fare: ₹${fare}
-GST (5%): ₹${(fare * 0.05).toFixed(2)}
-Total: ₹${gstFare.toFixed(2)}
-Time: ${currentTime}
---- Happy Journey ---
+
+    try {
+      let logo = logoUrl;
+      if (!logo) {
+        const conductorData = await AsyncStorage.getItem("conductor");
+        if (conductorData) {
+          const parsed = JSON.parse(conductorData);
+          logo = parsed.logo || "";
+        }
+      }
+
+      const html = `
+      <html>
+        <body style="font-family:monospace; max-width:280px; padding:10px; text-align:center;">
+          ${
+            logo
+              ? `<img src="${logo}" alt="logo" style="max-width: 100px; margin-bottom: 8px;" />`
+              : ""
+          }
+          <h2 style="margin: 4px 0;">${companyName}</h2>
+          <hr style="margin: 6px 0;" />
+          <p><strong>Ticket #:</strong> ${ticketNumber}</p>
+          <p><strong>Bus No:</strong> ${conductor?.busnumber}</p>
+          <p><strong>From:</strong> ${from}</p>
+          <p><strong>To:</strong> ${to}</p>
+          <p><strong>Passengers:</strong> ${passengerCount}</p>
+          <p><strong>Fare:</strong> ₹${fare}</p>
+          <p><strong>GST (5%):</strong> ₹${(fare * 0.05).toFixed(2)}</p>
+          <p><strong>Total:</strong> ₹${gstFare?.toFixed(2)}</p>
+          <p><strong>Time:</strong> ${currentTime}</p>
+          <hr style="margin: 8px 0;" />
+          <img src="https://api.qrserver.com/v1/create-qr-code/?data=${ticketNumber}&size=120x120" style="margin: 12px auto;" />
+          <p style="margin-top: 16px;">-- Happy Journey --</p>
+        </body>
+      </html>
     `;
 
-    await printTicket(ticketText);
-    resetAfterPrint();
-  } catch (error: any) {
-    Alert.alert("Print Error", error.message || "Could not print");
-    console.error("Bluetooth Print Error:", error);
-  }
-};
+      // ✅ Call API to send ticket data
+      const token = await AsyncStorage.getItem("token");
+      await axios.post(
+        `${BASE_URL}/api/pdf/generate-ticket`,
+        {
+          company_name: companyName,
+          bus_no: conductor?.busnumber,
+          ticket_no: ticketNumber,
+          from,
+          to,
+          fare,
+          count: passengerCount,
+          total: gstFare?.toFixed(2),
+          conductor_id:conductor?.id,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      // ✅ Proceed to print
+      const { uri } = await Print.printToFileAsync({ html });
+      await Print.printAsync({ uri });
+
+      resetAfterPrint();
+    } catch (err: any) {
+      Alert.alert("Error", "Failed to print or send ticket");
+      if (err?.response) {
+  console.log("❌ Backend Response:", err.response.data);
+} else {
+  console.log("❌ Error:", err.message);
+}
+
+    }
+  };
 
   const resetAfterPrint = () => {
     setFrom("");
