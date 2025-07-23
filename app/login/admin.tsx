@@ -44,6 +44,8 @@ export default function AdminLoginScreen() {
       const { token, admin } = res.data;
 
       await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('admin', 'admin'); // ✅ This line
+
       showSnackbar('Login Successful', 'success');
 
       setTimeout(() => {

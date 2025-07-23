@@ -8,15 +8,17 @@ import {
   Keyboard,
   ScrollView,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { TextInput, Button, useTheme } from 'react-native-paper';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 
 import { themeColors } from '../app/theme/colors';
 import { BASE_URL } from '../app/constants/baseURL';
 import CustomSnackbar from '../app/constants/CustomSnackbar'; // ✅ import your reusable Snackbar
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function WelcomeScreen() {
   const [phone, setPhone] = useState('');
@@ -31,6 +33,29 @@ export default function WelcomeScreen() {
     setSnackbarType(type);
     setSnackbarVisible(true);
   };
+
+  useEffect(() => {
+  const checkLoginStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const userType = await AsyncStorage.getItem('type'); // should be 'admin' or 'conductor'
+
+      if (token && userType) {
+        // ✅ Token exists, route based on role
+        if (userType === 'admin') {
+          router.replace('/admin-dashboard');
+        } else if (userType === 'conductor') {
+          router.replace('/conductor-dashboard');
+        }
+      }
+    } catch (err) {
+      console.log('Login check failed', err);
+    }
+  };
+
+  checkLoginStatus();
+}, []);
+
 
   const handleContinue = async () => {
     if (!phone || phone.length !== 10 || !/^[0-9]{10}$/.test(phone)) {
@@ -65,7 +90,7 @@ export default function WelcomeScreen() {
         router.push(`/login/conductor?phone=${phone}`);
       }
     } catch (error: any) {
-      console.log('API failed:', error?.message);
+      Alert.alert('API failed:', error?.message);
       showSnackbar('Failed to verify number.', 'error');
     }
   };

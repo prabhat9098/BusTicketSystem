@@ -1,9 +1,9 @@
 import { DefaultTheme, configureFonts } from 'react-native-paper';
 
 export const themeColors = {
-  primary: '#800080',
-  secondary: '#000000',
-  background: '#FFF',
+  primary: '#8e44ad',       // a rich purple shade
+  secondary: '#000000',     // black
+  background: '#ffffff',    // white
 };
 
 export const theme = {
@@ -12,7 +12,7 @@ export const theme = {
   roundness: 4,
   colors: {
     ...DefaultTheme.colors,
-    ...themeColors, // your custom colors will override the defaults
+    ...themeColors,
   },
   fonts: configureFonts({ isV3: true }),
   animation: {

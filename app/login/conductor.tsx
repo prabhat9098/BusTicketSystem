@@ -17,6 +17,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { themeColors } from '../../app/theme/colors';
 import { BASE_URL } from '../../app/constants/baseURL';
 import CustomSnackbar from '../../app/constants/CustomSnackbar';
+import { routes } from '../_layout';
 
 export default function ConductorLoginScreen() {
   const router = useRouter();
@@ -50,14 +51,19 @@ export default function ConductorLoginScreen() {
 
     const { token, conductor } = res.data;
 
+    // ✅ Clear previous AsyncStorage
+    await AsyncStorage.clear();
+
+    // ✅ Store fresh data
     await AsyncStorage.setItem('token', token);
     await AsyncStorage.setItem('conductor', JSON.stringify(conductor));
+    await AsyncStorage.setItem('company_name', conductor.company_name || '');
 
     showSnackbar('Login Successful', 'success');
 
     setTimeout(() => {
       router.push({
-        pathname: '/dashboard/conductordashboard',
+        pathname: routes.conductorDashboard,
         params: {
           id: conductor.id,
           name: conductor.name,
@@ -65,6 +71,7 @@ export default function ConductorLoginScreen() {
           busname: conductor.busname,
           busnumber: conductor.busnumber,
           path_id: conductor.path,
+          route_name: conductor.route_name,
           company_name: conductor.company_name,
           logo: conductor.logo,
         },
@@ -75,6 +82,7 @@ export default function ConductorLoginScreen() {
     showSnackbar(msg, 'error');
   }
 };
+
 
 
   return (
