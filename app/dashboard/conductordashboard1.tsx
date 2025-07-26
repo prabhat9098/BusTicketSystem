@@ -1,38 +1,33 @@
-
-
 // ConductorDashboardScreen.tsx
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import axios from "axios";
+import { router } from "expo-router";
+import moment from "moment";
 import React, { useEffect, useState } from "react";
 import {
-  View,
+  Alert,
+  BackHandler,
+  FlatList,
+  Modal,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  ScrollView,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  BackHandler,
   ToastAndroid,
-  Alert,
-  StatusBar,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Appbar, Button, Divider, Avatar } from "react-native-paper";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import moment from "moment";
-import axios from "axios";
-import { Ionicons } from "@expo/vector-icons";
-import * as Print from "expo-print";
-import { BASE_URL } from "../constants/baseURL";
-import { router } from "expo-router";
+import { Appbar, Avatar, Button, Divider } from "react-native-paper";
 import { getStatusBarHeight } from "react-native-status-bar-height";
 import {
+  printTicketCustom,
   requestBluetoothPermissions,
-  listBluetoothDevices,
-  connectToPrinter,
-  printTicket,
 } from "../../bluetoothPrinterHelper";
+import { BASE_URL } from "../constants/baseURL";
 
-export default function ConductorDashboard () {
+export default function ConductorDashboard() {
   const navigation = useNavigation();
   const statusBarHeight = getStatusBarHeight();
   const [companyName, setCompanyName] = useState("");
@@ -173,21 +168,25 @@ export default function ConductorDashboard () {
   };
 
   const handlePrint = async () => {
-  if (!fare || !gstFare) return Alert.alert("Error", "Calculate fare first");
+    if (!fare || !gstFare) return Alert.alert("Error", "Calculate fare first");
 
-  try {
-    const granted = await requestBluetoothPermissions();
-    if (!granted) return Alert.alert("Permission Denied", "Bluetooth permission is required");
+    try {
+      const granted = await requestBluetoothPermissions();
+      if (!granted)
+        return Alert.alert(
+          "Permission Denied",
+          "Bluetooth permission is required"
+        );
 
-    const devices = await listBluetoothDevices();
-    const paired = JSON.parse(devices.found || "[]");
-    if (!paired.length) return Alert.alert("No Devices", "No paired printers found");
+      // const devices = await listBluetoothDevices();
+      // const paired = JSON.parse(devices.found || "[]");
+      // if (!paired.length) return Alert.alert("No Devices", "No paired printers found");
 
-    const printer = paired[0]; // You can allow selection too
-    await connectToPrinter(printer.address);
+      // const printer = paired[0]; // You can allow selection too
+      // await connectToPrinter("04:7F:0E:2E:E2:3D");
 
-    const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
-    const ticketText = `
+      const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
+      const ticketText = `
 *** ${companyName} ***
 Ticket #: ${ticketNumber}
 Bus No: ${conductor?.busnumber}
@@ -201,13 +200,13 @@ Time: ${currentTime}
 --- Happy Journey ---
     `;
 
-    await printTicket(ticketText);
-    resetAfterPrint();
-  } catch (error: any) {
-    Alert.alert("Print Error", error.message || "Could not print");
-    console.error("Bluetooth Print Error:", error);
-  }
-};
+      await printTicketCustom("04:7F:0E:2E:E2:3D", ticketText);
+      resetAfterPrint();
+    } catch (error: any) {
+      Alert.alert("Print Error", error.message || "Could not print");
+      console.error("Bluetooth Print Error:", error);
+    }
+  };
 
   const resetAfterPrint = () => {
     setFrom("");
@@ -248,7 +247,7 @@ Time: ${currentTime}
           title={`${companyName} Bus System`}
           titleStyle={{ textAlign: "center" }}
         />
-        <Appbar.Action icon="account-circle" size={36}/>
+        <Appbar.Action icon="account-circle" size={36} />
       </Appbar.Header>
 
       <ScrollView style={styles.container}>

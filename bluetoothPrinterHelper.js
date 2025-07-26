@@ -1,19 +1,24 @@
-import { BluetoothEscposPrinter, BluetoothManager } from 'react-native-bluetooth-escpos-printer';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform } from "react-native";
+import {
+  BluetoothEscposPrinter,
+  BluetoothManager,
+} from "react-native-bluetooth-escpos-printer";
 
 export const requestBluetoothPermissions = async () => {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === "android") {
     const granted = await PermissionsAndroid.requestMultiple([
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
       PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
     ]);
-    return Object.values(granted).every(status => status === PermissionsAndroid.RESULTS.GRANTED);
+    return Object.values(granted).every(
+      (status) => status === PermissionsAndroid.RESULTS.GRANTED
+    );
   }
   return true;
 };
 
-export const listBluetoothDevices = async (): Promise<any[]> => {
+export const listBluetoothDevices = async () => {
   try {
     return await BluetoothManager.scanDevices();
   } catch (e) {
@@ -21,7 +26,7 @@ export const listBluetoothDevices = async (): Promise<any[]> => {
   }
 };
 
-export const connectToPrinter = async (macAddress: string) => {
+export const connectToPrinter = async (macAddress) => {
   try {
     await BluetoothManager.connect(macAddress);
     return true;
@@ -30,6 +35,13 @@ export const connectToPrinter = async (macAddress: string) => {
   }
 };
 
-export const printTicket = async (ticketText: string) => {
-  await BluetoothEscposPrinter.printText(ticketText + '\r\n\r\n', {});
+export const printTicketCustom = (address, ticketText) => {
+  BluetoothManager.connect(address).then(
+    async () => {
+      await BluetoothEscposPrinter.printText(ticketText + "\r\n\r\n", {});
+    },
+    (err) => {
+      console.log("Connection error:", err);
+    }
+  );
 };
