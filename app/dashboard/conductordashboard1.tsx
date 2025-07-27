@@ -6,11 +6,16 @@ import axios from "axios";
 import { router } from "expo-router";
 import moment from "moment";
 import React, { useEffect, useState } from "react";
+import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+//@ts-ignore
+import { BluetoothEscposPrinter as ThermalPrinter } from 'react-native-bluetooth-escpos-printer';
+
 import {
   Alert,
   BackHandler,
   FlatList,
   Modal,
+  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,13 +24,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Appbar, Avatar, Button, Divider } from "react-native-paper";
+import { Appbar, Avatar, Button, Divider, TextInput } from "react-native-paper";
 import { getStatusBarHeight } from "react-native-status-bar-height";
 import {
-  printTicketCustom,
+  connectToPrinter,
+  printTextToPrinter,
   requestBluetoothPermissions,
+  scanDevices,
+  getBase64FromImage
 } from "../../bluetoothPrinterHelper";
 import { BASE_URL } from "../constants/baseURL";
+import { SafeAreaView } from "react-native-safe-area-context";
+//@ts-ignore
+import IMG1 from "../../assets/images/IMG1.jpeg";
+//@ts-ignore
+import IMG2 from "../../assets/images/IMG2.jpeg";
 
 export default function ConductorDashboard() {
   const navigation = useNavigation();
@@ -39,6 +52,7 @@ export default function ConductorDashboard() {
   const [filteredToPoints, setFilteredToPoints] = useState<string[]>([]);
   const [passengerCount, setPassengerCount] = useState(1);
   const [fare, setFare] = useState<number | null>(null);
+  const [baseFare, setBaseFare] = useState(0); // fare * passengers
   const [gstFare, setGstFare] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState(
     moment().format("YYYY-MM-DD HH:mm:ss")
@@ -47,12 +61,49 @@ export default function ConductorDashboard() {
   const [fromModalVisible, setFromModalVisible] = useState(false);
   const [toModalVisible, setToModalVisible] = useState(false);
 
+  const [btModalVisible, setBtModalVisible] = useState(false);
+  const [btDevices, setBtDevices] = useState<any[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState<any>(null);
+  const [btLoading, setBtLoading] = useState(false);
+  const [discount, setDiscount] = useState("");
+  const [number, setNumber] = useState("");
+  const [luggage, setLuggage] = useState("");
+  const [gst, setGst] = useState(0);
+  const [total, setTotal] = useState(0);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(moment().format("YYYY-MM-DD HH:mm:ss"));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (fare !== null && fare > 0) {
+      calculateLiveFare();
+    }
+  }, [passengerCount, discount, luggage, fare]);
+
+  const calculateLiveFare = () => {
+    if (fare === null) return;
+    const totalBaseFare = (fare ?? 0) * passengerCount;
+
+    let discountedFare = parseFloat(discount);
+    let luggageFare = parseFloat(luggage) || 0;
+
+    if (!isNaN(discountedFare) && discountedFare > totalBaseFare) {
+      discountedFare = totalBaseFare;
+    }
+
+    const finalFare = !isNaN(discountedFare) ? discountedFare : totalBaseFare;
+
+    const calculatedGst = finalFare * 0.05;
+    const totalWithGst = finalFare + calculatedGst + luggageFare;
+
+    setBaseFare(finalFare);
+    setGst(calculatedGst);
+    setTotal(totalWithGst);
+  };
 
   useEffect(() => {
     let lastPress = 0;
@@ -73,21 +124,64 @@ export default function ConductorDashboard() {
   }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      const token = await AsyncStorage.getItem("token");
-      const company = await AsyncStorage.getItem("company_name");
-      const condStr = await AsyncStorage.getItem("conductor");
-
-      if (!condStr || !token)
-        return Alert.alert("Error", "Missing token or conductor");
-
-      const cond = JSON.parse(condStr);
-      setCompanyName(company || "");
-      setConductor(cond);
-
-      if (cond.logo) setLogoUrl(cond.logo);
-
+    const initBluetooth = async () => {
       try {
+        const granted = await requestBluetoothPermissions();
+        if (!granted)
+          return Alert.alert("Permission Denied", "Bluetooth access required.");
+
+        const storedPrinter = await AsyncStorage.getItem("selectedPrinter");
+        if (storedPrinter) setSelectedPrinter(JSON.parse(storedPrinter));
+
+        const devices = await scanDevices();
+        setBtDevices(devices);
+      } catch (err: any) {
+        Alert.alert(
+          "Bluetooth Init Error",
+          err.message || "Failed to initialize Bluetooth"
+        );
+      }
+    };
+
+    initBluetooth();
+  }, []);
+
+  const reloadBluetoothDevices = async () => {
+    try {
+      setBtLoading(true);
+      const granted = await requestBluetoothPermissions();
+      if (!granted) throw new Error("Bluetooth permission denied");
+
+      const devices = await scanDevices();
+      setBtDevices(devices);
+      ToastAndroid.show("Device list reloaded", ToastAndroid.SHORT);
+    } catch (err: any) {
+      Alert.alert("Scan Error", err.message || "Failed to scan devices");
+    } finally {
+      setBtLoading(false);
+    }
+  };
+
+  const handlePrinterSelect = async (printer: any) => {
+    setSelectedPrinter(printer);
+    await AsyncStorage.setItem("selectedPrinter", JSON.stringify(printer));
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const company = await AsyncStorage.getItem("company_name");
+        const condStr = await AsyncStorage.getItem("conductor");
+
+        if (!condStr || !token)
+          return Alert.alert("Error", "Missing token or conductor");
+
+        const cond = JSON.parse(condStr);
+        setCompanyName(company || "");
+        setConductor(cond);
+        if (cond.logo) setLogoUrl(cond.logo);
+
         const res = await axios.get(
           `${BASE_URL}/api/path/points-by-route?path_id=${cond.path_id}`,
           {
@@ -95,14 +189,14 @@ export default function ConductorDashboard() {
           }
         );
 
-        console.log("cond:", cond);
-        console.log("path_id:", cond.path);
-
+        console.log("cond:", cond.id);
+        console.log("path_id1:", cond.path_id);
         console.log("✅ API Response (points):", res.data);
+
         setPoints(res.data.points || []);
       } catch (err: any) {
-        console.error("❌ API Error loading points:", err.message || err);
-        Alert.alert("Error", "Failed to load route points.");
+        console.error("❌ Error loading data:", err.message || err);
+        Alert.alert("Error", "Failed to load dashboard data.");
       }
     };
 
@@ -127,11 +221,14 @@ export default function ConductorDashboard() {
   }, [passengerCount]);
 
   const calculateFare = async () => {
-    if (!from || !to)
-      return Alert.alert("Error", "Please select From and To points");
+    if (!from || !to) {
+      Alert.alert("Error", "Please select From and To points");
+      return;
+    }
 
     try {
       const token = await AsyncStorage.getItem("token");
+
       const res = await axios.post(
         `${BASE_URL}/api/path/calculate-fare`,
         {
@@ -142,10 +239,39 @@ export default function ConductorDashboard() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      console.log({
+        path_id: conductor.path_id,
+        from,
+        to,
+        journey: reverse ? "down" : "up",
+      });
+
       const base = res.data.total_fare;
+      const totalBaseFare = base * passengerCount;
+
+      let discountedFare = parseFloat(discount);
+      let luggageFare = parseFloat(luggage) || 0;
+
+      // Validate discount
+      if (!isNaN(discountedFare) && discountedFare > totalBaseFare) {
+        Alert.alert(
+          "Invalid Discount",
+          "Discounted fare cannot exceed base fare"
+        );
+        return;
+      }
+
+      const finalFare = !isNaN(discountedFare) ? discountedFare : totalBaseFare;
+
+      const calculatedGst = finalFare * 0.05; // 5% GST
+      const totalWithGst = finalFare + calculatedGst + luggageFare;
+
       setFare(base);
-      setGstFare(base * passengerCount * 1.05);
+      setBaseFare(finalFare);
+      setGst(calculatedGst);
+      setTotal(totalWithGst);
     } catch (err) {
+      console.error(err);
       Alert.alert("Error", "Failed to calculate fare");
     }
   };
@@ -167,54 +293,159 @@ export default function ConductorDashboard() {
     }
   };
 
-  const handlePrint = async () => {
-    if (!fare || !gstFare) return Alert.alert("Error", "Calculate fare first");
+ const handlePrint = async () => {
+  if (!fare || !total) return Alert.alert("Error", "Calculate fare first");
 
-    try {
-      const granted = await requestBluetoothPermissions();
-      if (!granted)
-        return Alert.alert(
-          "Permission Denied",
-          "Bluetooth permission is required"
-        );
+  const printerToUse = selectedPrinter;
+  if (!printerToUse) {
+    return Alert.alert("No Printer Selected", "Please select a printer first.");
+  }
 
-      // const devices = await listBluetoothDevices();
-      // const paired = JSON.parse(devices.found || "[]");
-      // if (!paired.length) return Alert.alert("No Devices", "No paired printers found");
+  try {
+    const granted = await requestBluetoothPermissions();
+    if (!granted) throw new Error("Bluetooth permission denied");
 
-      // const printer = paired[0]; // You can allow selection too
-      // await connectToPrinter("04:7F:0E:2E:E2:3D");
+    await connectToPrinter(printerToUse.address);
 
-      const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
-      const ticketText = `
-*** ${companyName} ***
-Ticket #: ${ticketNumber}
-Bus No: ${conductor?.busnumber}
-From: ${from}
-To: ${to}
-Passengers: ${passengerCount}
-Fare: ₹${fare}
-GST (5%): ₹${(fare * 0.05).toFixed(2)}
-Total: ₹${gstFare.toFixed(2)}
-Time: ${currentTime}
---- Happy Journey ---
+    const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
+    const gstAmount = fare * 0.05;
+    const cgst = (fare * 0.025).toFixed(2);
+    const igst = (fare * 0.025).toFixed(2);
+    const luggageValue = parseFloat(luggage || "0");
+    const discountValue = parseFloat(discount || "0");
+
+    // Set GST and Logo Based on Company
+    let gstNumber = "";
+    // let logoImagePath = null;
+
+    if (companyName === "Trisojoyee") {
+      gstNumber = "19ANUPC9666P1ZQ";
+      // logoImagePath = IMG2;
+    } else if (companyName === "Pratima") {
+      gstNumber = "19BSDPD3896H1Z";
+      // logoImagePath = IMG1;
+    }
+
+    // Convert image to base64 and print logo (DISABLED)
+    /*
+    const logoBase64 = await getBase64FromImage(logoImagePath);
+    await ThermalPrinter.printImageBase64(logoBase64, {
+      width: 250,
+      align: "center",
+    });
+    */
+
+    const ticketText = `
+      ${companyName} Bus Service
+      GSTIN: ${gstNumber}
+      -----------------------------
+      Ticket #: ${ticketNumber}
+      Bus No: ${conductor?.busnumber}
+      From: ${from}
+      To: ${to}
+      Passengers: ${passengerCount}
+      Mobile: ${number}
+      Fare: Rs.${fare}
+      CGST (2.5%): Rs.${cgst}
+      IGST (2.5%): Rs.${igst}
+      ${luggageValue > 0 ? `Luggage: Rs.${luggageValue.toFixed(2)}\n` : ""}
+      ${discountValue > 0 ? `Discount: Rs.${discountValue.toFixed(2)}\n` : ""}
+      Total: Rs.${total.toFixed(2)}
+      Time: ${currentTime}
+      -----------------------------
+      Thank You & Happy Journey!
     `;
 
-      await printTicketCustom("04:7F:0E:2E:E2:3D", ticketText);
-      resetAfterPrint();
-    } catch (error: any) {
-      Alert.alert("Print Error", error.message || "Could not print");
-      console.error("Bluetooth Print Error:", error);
+    // Fire API in background
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+
+        const response = await axios.post(
+          `${BASE_URL}/api/pdf/generate-ticket`,
+          {
+              company_name: companyName,
+              bus_no: conductor?.busnumber || "",
+              ticket_no: ticketNumber,
+              from,
+              to,
+              mobile: number,
+              discount: parseFloat(discount || "0"),
+              luggage: parseFloat(luggage || "0"),
+              fare: fare,
+              count: passengerCount,
+              total: total.toFixed(2),
+              conductor_id: conductor?.id || "", // adjust key if different
+            },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log("API Ticket Response:", response.data);
+      } catch (err) {
+        console.error("API Ticket Error:", err.message || err);
+      }
+    })();
+    
+
+    await ThermalPrinter.printText(ticketText, {
+      fontSize: 20,
+      alignment: "left",
+    });
+
+    
+
+    await ThermalPrinter.printNewLine();
+
+    // Reset form fields but preserve reverse toggle
+    if (typeof resetForm === "function") {
+    resetForm();
+  } else {
+    console.warn("resetForm is not defined correctly");
+  }
+  } catch (error) {
+    console.error(error);
+    Alert.alert("Print Error", error.message || "Unknown error occurred.");
+  }
+};
+
+
+  const loadBluetoothDevices = async () => {
+    try {
+      setBtLoading(true);
+      const granted = await requestBluetoothPermissions();
+      if (!granted) throw new Error("Bluetooth permission denied");
+
+      const devices = await scanDevices();
+      setBtDevices(devices);
+    } catch (err: any) {
+      Alert.alert("Bluetooth Error", err.message || "Failed to scan devices");
+    } finally {
+      setBtLoading(false);
     }
   };
 
-  const resetAfterPrint = () => {
-    setFrom("");
-    setTo("");
-    setPassengerCount(1);
-    setFare(null);
-    setGstFare(null);
-  };
+ const resetForm = () => {
+  console.log("Resetting form...");
+  setFrom("");
+  setTo("");
+  setFilteredToPoints([]);
+  setPassengerCount(1);
+  setFare(null);
+  setBaseFare(0);
+  setGstFare(null);
+  setNumber("");
+  setLuggage("");
+  setDiscount("");
+  setGst(0);
+  setTotal(0);
+  // Keep reverse as is, do not reset
+};
+
 
   const clearSelections = () => {
     setFrom("");
@@ -235,20 +466,36 @@ Time: ${currentTime}
         backgroundColor="transparent"
         barStyle="dark-content"
       />
-      <Appbar.Header
-        style={{
-          paddingTop: statusBarHeight,
-          backgroundColor: "white",
-          alignItems: "center",
-        }}
-      >
-        <Appbar.Action icon="power" size={36} onPress={confirmLogout} />
-        <Appbar.Content
-          title={`${companyName} Bus System`}
-          titleStyle={{ textAlign: "center" }}
-        />
-        <Appbar.Action icon="account-circle" size={36} />
-      </Appbar.Header>
+      <SafeAreaView style={styles.safeArea}>
+        <Appbar.Header
+          style={{
+            paddingTop: statusBarHeight,
+            backgroundColor: "white",
+            elevation: 4, // adds shadow on Android
+            shadowColor: "#000", // for iOS shadow
+            alignItems: "center",
+            top: -20,
+          }}
+        >
+          <Appbar.Action
+            icon="power"
+            size={36}
+            onPress={() => confirmLogout()}
+          />
+
+          <Appbar.Content
+            title={`${companyName} Bus Service`}
+            titleStyle={{
+              textAlign: "center",
+              fontSize: 18,
+              fontWeight: "bold",
+            }}
+            style={{ alignItems: "center" }} // ensures title is centered
+          />
+
+          <Appbar.Action icon="account-circle" size={36} />
+        </Appbar.Header>
+      </SafeAreaView>
 
       <ScrollView style={styles.container}>
         <View style={styles.header}>
@@ -304,8 +551,11 @@ Time: ${currentTime}
 
         <Button
           icon="repeat"
-          mode="outlined"
-          style={styles.btn}
+          mode="contained"
+          style={[
+            styles.btn,
+            { backgroundColor: reverse ? "#199387ff" : "#1976d2" },
+          ]}
           onPress={onReverse}
         >
           Reverse Route
@@ -325,21 +575,84 @@ Time: ${currentTime}
           />
         </View>
 
+        {/* Discount */}
+        <TextInput
+          style={styles.input}
+          mode="outlined"
+          label="Mobile Number"
+          keyboardType="numeric"
+          value={number}
+          onChangeText={setNumber}
+        />
+
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {/* Discount */}
+          <TextInput
+            style={{ flex: 1 }}
+            mode="outlined"
+            label="Discount (optional)"
+            keyboardType="numeric"
+            value={discount}
+            onChangeText={setDiscount}
+          />
+
+          {/* Luggage */}
+          <TextInput
+            style={{ flex: 1 }}
+            mode="outlined"
+            label="Luggage Amount (optional)"
+            keyboardType="numeric"
+            value={luggage}
+            onChangeText={setLuggage}
+          />
+        </View>
+
         <Button mode="contained" style={styles.btn} onPress={calculateFare}>
           Calculate Fare
         </Button>
 
-        {gstFare && (
-          <Text style={styles.total}>
-            Total Fare (incl. GST): ₹{gstFare.toFixed(2)}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            marginVertical: 8,
+          }}
+        >
+          <Text style={styles.breakdown}>
+            Base Fare: ₹ {baseFare.toFixed(2)}
+          </Text>
+          <Text style={styles.breakdown}>GST (5%): ₹ {gst.toFixed(2)}</Text>
+          <Text style={styles.breakdown}>
+            Luggage: ₹ {parseFloat(luggage || 0).toFixed(2)}
+          </Text>
+        </View>
+
+        <Text style={styles.total}>Total Fare: ₹ {total.toFixed(2)}</Text>
+
+        <Button
+          icon="bluetooth"
+          mode="outlined"
+          onPress={() => setBtModalVisible(true)}
+          style={styles.btn}
+        >
+          Select Bluetooth Printer
+        </Button>
+
+        {selectedPrinter?.name && (
+          <Text
+            style={{ textAlign: "center", color: "#2e7d32", marginBottom: 10 }}
+          >
+            Selected Printer: {selectedPrinter.name}
           </Text>
         )}
 
         <Button
-          icon="printer"
           mode="contained"
           style={styles.btn}
           onPress={handlePrint}
+          icon={({ size, color }) => (
+            <Icon name="printer" size={30} color={color} /> // Change size here
+          )}
         >
           Print Ticket
         </Button>
@@ -407,12 +720,64 @@ Time: ${currentTime}
           </View>
         </View>
       </Modal>
+
+      {/* Bluetooth Device Modal */}
+      <Modal
+        visible={btModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBtModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Bluetooth Printer</Text>
+              <TouchableOpacity onPress={reloadBluetoothDevices}>
+                <Ionicons name="refresh" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {btLoading ? (
+              <Text>Scanning devices...</Text>
+            ) : (
+              <FlatList
+                data={btDevices}
+                keyExtractor={(item, i) => `${item.address}_${i}`}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={{
+                      padding: 12,
+                      backgroundColor:
+                        selectedPrinter?.address === item.address
+                          ? "#e0f7fa"
+                          : "#fff",
+                    }}
+                    onPress={() => handlePrinterSelect(item)}
+                  >
+                    <Text>{item.name || "Unnamed Device"}</Text>
+                    <Text style={{ fontSize: 12, color: "#555" }}>
+                      {item.address}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <Divider />}
+              />
+            )}
+            <Button onPress={() => setBtModalVisible(false)}>Done</Button>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16 },
+  container: { flex: 1, backgroundColor: "#fff", padding: 16, bottom: 15 },
+  headerText: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
   header: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   welcome: { fontSize: 18, fontWeight: "bold" },
   subtitle: { color: "gray" },
@@ -423,14 +788,14 @@ const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: 6,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 5,
   },
-  btn: { marginVertical: 10 },
+  btn: { marginVertical: 8 },
   counterRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginVertical: 12,
+    marginVertical: 10,
   },
   count: { marginHorizontal: 20, fontSize: 18 },
   total: {
@@ -439,6 +804,25 @@ const styles = StyleSheet.create({
     color: "#2e7d32",
     marginVertical: 10,
   },
+  fareBox: {
+    backgroundColor: "#f0f4ff",
+    padding: 12,
+    marginVertical: 10,
+    borderRadius: 8,
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  labelBold: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginTop: 8,
+  },
+  input: {
+    marginBottom: 10,
+  },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -463,6 +847,12 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 10,
     textAlign: "center",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
   },
 
   routeOption: { padding: 12 },

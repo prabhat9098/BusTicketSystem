@@ -16,7 +16,11 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { themeColors } from '../../app/theme/colors';
 import { BASE_URL } from '../../app/constants/baseURL';
-import CustomSnackbar from '../../app/constants/CustomSnackbar'; // ✅ Import snackbar
+import CustomSnackbar from '../../app/constants/CustomSnackbar';
+
+import IMG1 from '../../assets/images/IMG1.jpeg';
+import IMG2 from '../../assets/images/IMG2.jpeg';
+import DefaultLogo from '../../assets/images/d.png';
 
 export default function AdminLoginScreen() {
   const router = useRouter();
@@ -44,7 +48,9 @@ export default function AdminLoginScreen() {
       const { token, admin } = res.data;
 
       await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('admin', 'admin'); // ✅ This line
+      await AsyncStorage.setItem('admin', 'admin');
+      await AsyncStorage.setItem('type', 'admin');
+      await AsyncStorage.setItem('admin', JSON.stringify(admin));
 
       showSnackbar('Login Successful', 'success');
 
@@ -66,6 +72,15 @@ export default function AdminLoginScreen() {
     }
   };
 
+  // Determine which image to show
+  const getLogoImage = () => {
+    const nameLower = (company || name || '').toString().toLowerCase();
+
+    if (nameLower.includes('pratima')) return IMG1;
+    if (nameLower.includes('trisojoyee')) return IMG2;
+    return DefaultLogo;
+  };
+
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
@@ -78,10 +93,8 @@ export default function AdminLoginScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Logo */}
-            {logo && typeof logo === 'string' && (
-              <Image source={{ uri: logo }} style={styles.logo} />
-            )}
+            {/* Company-specific Logo */}
+            <Image source={getLogoImage()} style={styles.logo} />
 
             {/* Company Name */}
             {company && <Text style={styles.companyText}>{company}</Text>}
@@ -110,7 +123,6 @@ export default function AdminLoginScreen() {
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
-      {/* ✅ Global Snackbar */}
       <CustomSnackbar
         visible={snackbarVisible}
         message={snackbarMsg}
@@ -136,9 +148,9 @@ const styles = StyleSheet.create({
     backgroundColor: themeColors.background,
   },
   logo: {
-    width: 100,
+    width: 200,
     height: 100,
-    borderRadius: 12,
+    borderRadius:10, // <- extra curve for IMG1
     alignSelf: 'center',
     marginBottom: 12,
   },

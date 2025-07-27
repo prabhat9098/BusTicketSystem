@@ -21,8 +21,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { BASE_URL } from '../../app/constants/baseURL';
 import CustomSnackbar from '../../app/constants/CustomSnackbar';
-import { BackHandler } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -32,6 +30,7 @@ export default function AdminDashboard() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState('');
   const [snackbarType, setSnackbarType] = useState<'success' | 'error'>('success');
+  const [loading, setLoading] = useState(true);
 
   const showSnackbar = (msg: string, type: 'success' | 'error' = 'success') => {
     setSnackbarMsg(msg);
@@ -47,8 +46,6 @@ export default function AdminDashboard() {
     ]);
   };
 
-  
-
   const handleLogout = async () => {
     try {
       await AsyncStorage.clear();
@@ -62,6 +59,12 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     try {
       const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        Alert.alert("Error", "Missing token, please login again");
+        router.replace("/");
+        return;
+      }
+
       const res = await axios.get(`${BASE_URL}/api/admin/dashboard-stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -69,11 +72,31 @@ export default function AdminDashboard() {
     } catch (err: any) {
       showSnackbar("Failed to fetch dashboard stats", 'error');
       console.error(err?.response?.data || err);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // ✅ Check session and fetch data
   useEffect(() => {
-    fetchStats();
+    const loadData = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const type = await AsyncStorage.getItem("type");
+
+        if (!token || type !== "admin") {
+          Alert.alert("Session Expired", "Please login again");
+          router.replace("/");
+          return;
+        }
+        await fetchStats();
+      } catch (err) {
+        console.error("Error loading admin session:", err);
+        router.replace("/");
+      }
+    };
+
+    loadData();
   }, []);
 
   const computedCards = stats ? [
@@ -81,8 +104,8 @@ export default function AdminDashboard() {
     { title: 'Today Active Conductors', value: stats.activeConductorsToday, icon: 'account-check', color: '#fff3e0' },
     { title: "Today's Sales", value: `₹ ${stats.totalIncomeToday}`, icon: 'cash', color: '#e8f5e9' },
     { title: 'Monthly Sales', value: `₹ ${stats.monthlyIncome}`, icon: 'currency-inr', color: '#f3e5f5' },
-    { title: 'Total Buses', value: stats.totalConductors, icon: 'bus', color: '#e1f5fe' }, // same as totalConductors
-    { title: 'Active Buses Today', value: stats.activeConductorsToday, icon: 'bus-clock', color: '#fffde7' }, // same as activeConductorsToday
+    { title: 'Total Buses', value: stats.totalBuses || stats.totalConductors, icon: 'bus', color: '#e1f5fe' },
+    { title: 'Active Buses Today', value: stats.activeBusesToday || stats.activeConductorsToday, icon: 'bus-clock', color: '#fffde7' },
     {
       title: 'Conductors on Leave',
       value: stats.totalConductors - stats.activeConductorsToday,
@@ -99,6 +122,14 @@ export default function AdminDashboard() {
     { label: 'Add Route Fare', icon: 'currency-inr', route: '/admin/add-fare' },
     { label: 'Analytics Report', icon: 'chart-line', route: '/admin/conductoranalysis' },
   ];
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Text style={{ textAlign: "center", marginTop: 50 }}>Loading Admin Dashboard...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,13 +186,6 @@ export default function AdminDashboard() {
           type={snackbarType}
         />
       </ScrollView>
-
-      {/* Bottom Tabs */}
-      <View style={styles.bottomTabs}>
-        <IconButton icon="home" />
-        <IconButton icon="account" />
-        <IconButton icon="cog" />
-      </View>
     </SafeAreaView>
   );
 }
@@ -230,16 +254,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 10,
     textAlign: 'left',
-  },
-  bottomTabs: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 0.5,
-    borderTopColor: '#ccc',
-    backgroundColor: '#fff',
-    position: 'absolute',
-    bottom: Platform.OS === 'android' ? 0 : 0,
-    left: 0,
-    right: 0,
   },
 });

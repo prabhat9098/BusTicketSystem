@@ -98,6 +98,16 @@ export default function ConductorAnalysisScreen() {
     fetchReport(conductor._id);
   };
 
+    type DailySummary = {
+  date: string;
+  totalIncome: number;
+  totalTickets: number;
+  baseFare: number;
+  discount: number;
+  luggage: number;
+};
+
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       
@@ -156,28 +166,32 @@ export default function ConductorAnalysisScreen() {
       ) : (
         <View style={styles.summaryContainer}>
           {dailySummary.length === 0 && selectedConductor ? (
-            <Text style={styles.noData}>No report found for {selectedConductor.name}</Text>
-          ) : (
-            dailySummary.map((entry, idx) => (
-              <Card key={idx} style={styles.card}>
-                <Card.Title
-                  title={entry.date}
-                  subtitle={`Tickets: ${entry.totalTickets}`}
-                  left={() => (
-                    <Avatar.Icon
-                      icon="calendar"
-                      size={40}
-                      style={{ backgroundColor: "#e3f2fd" }}
-                      color={colors.primary}
-                    />
-                  )}
-                />
-                <Card.Content>
-                  <Text style={styles.income}>Income: ₹{entry.totalIncome}</Text>
-                </Card.Content>
-              </Card>
-            ))
-          )}
+  <Text style={styles.noData}>No report found for {selectedConductor.name}</Text>
+) : (
+  dailySummary.map((entry, idx) => (
+    <Card key={idx} style={styles.card}>
+      <Card.Title
+        title={entry.date}
+        subtitle={`Tickets: ${entry.totalTickets}`}
+        left={() => (
+          <Avatar.Icon
+            icon="calendar"
+            size={40}
+            style={{ backgroundColor: "#e3f2fd" }}
+            color={colors.primary}
+          />
+        )}
+      />
+      <Card.Content>
+        <Text style={styles.income}>Income: ₹{entry.totalIncome}</Text>
+        <Text style={styles.details}>Base Fare: ₹{entry.baseFare || 0}</Text>
+        <Text style={styles.details}>Luggage: ₹{entry.luggage || 0}</Text>
+        <Text style={styles.details}>Discount: ₹{entry.discount || 0}</Text>
+      </Card.Content>
+    </Card>
+  ))
+)}
+
         </View>
       )}
 
@@ -212,6 +226,12 @@ const styles = StyleSheet.create({
   summaryContainer: {
     marginTop: 10,
   },
+  details: {
+  fontSize: 14,
+  color: "#555",
+  marginTop: 2,
+},
+
   noData: {
     textAlign: "center",
     color: "#888",

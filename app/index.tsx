@@ -9,76 +9,76 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-} from 'react-native';
-import { TextInput, Button, useTheme } from 'react-native-paper';
-import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
-import axios from 'axios';
-
-import { themeColors } from '../app/theme/colors';
-import { BASE_URL } from '../app/constants/baseURL';
-import CustomSnackbar from '../app/constants/CustomSnackbar'; // ✅ import your reusable Snackbar
-import AsyncStorage from '@react-native-async-storage/async-storage';
+} from "react-native";
+import { TextInput, Button, useTheme } from "react-native-paper";
+import { useEffect, useState } from "react";
+import { useRouter } from "expo-router";
+import axios from "axios";
+import { routes } from "./_layout";
+import { themeColors } from "../app/theme/colors";
+import { BASE_URL } from "../app/constants/baseURL";
+import CustomSnackbar from "../app/constants/CustomSnackbar"; // ✅ import your reusable Snackbar
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function WelcomeScreen() {
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarType, setSnackbarType] = useState<'success' | 'error'>('success');
+  const [snackbarMsg, setSnackbarMsg] = useState("");
+  const [snackbarType, setSnackbarType] = useState<"success" | "error">(
+    "success"
+  );
   const router = useRouter();
   const { colors } = useTheme();
 
-  const showSnackbar = (message: string, type: 'success' | 'error') => {
+  const showSnackbar = (message: string, type: "success" | "error") => {
     setSnackbarMsg(message);
     setSnackbarType(type);
     setSnackbarVisible(true);
   };
 
   useEffect(() => {
-  const checkLoginStatus = async () => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      const userType = await AsyncStorage.getItem('type'); // should be 'admin' or 'conductor'
-
-      if (token && userType) {
-        // ✅ Token exists, route based on role
-        if (userType === 'admin') {
-          router.replace('/admin-dashboard');
-        } else if (userType === 'conductor') {
-          router.replace('/conductor-dashboard');
+    const checkLoginStatus = async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const userType = await AsyncStorage.getItem("type"); // should be 'admin' or 'conductor'
+        console.log(token,userType);
+        if (userType === "admin") {
+          router.replace(routes.adminDashboard);
+        } else if (userType === "conductor") {
+          router.replace(routes.conductorDashboard);
         }
+      } catch (err) {
+        console.log("Login check failed", err);
       }
-    } catch (err) {
-      console.log('Login check failed', err);
-    }
-  };
+    };
 
-  checkLoginStatus();
-}, []);
-
+    checkLoginStatus();
+  }, []);
 
   const handleContinue = async () => {
     if (!phone || phone.length !== 10 || !/^[0-9]{10}$/.test(phone)) {
-      showSnackbar('Please enter a valid 10-digit mobile number.', 'error');
+      showSnackbar("Please enter a valid 10-digit mobile number.", "error");
       return;
     }
 
     try {
-      const res = await axios.get(`${BASE_URL}/api/auth/check-number?number=${phone}`);
+      const res = await axios.get(
+        `${BASE_URL}/api/auth/check-number?number=${phone}`
+      );
       const { type, message, data } = res.data;
 
       const welcomeText =
-        type === 'admin'
-          ? 'Welcome to Admin Login'
-          : type === 'conductor'
-          ? 'Welcome to Conductor Login'
-          : 'Unknown user type.';
+        type === "admin"
+          ? "Welcome to Admin Login"
+          : type === "conductor"
+          ? "Welcome to Conductor Login"
+          : "Unknown user type.";
 
-      showSnackbar(welcomeText, 'success');
+      showSnackbar(welcomeText, "success");
 
-      if (type === 'admin') {
+      if (type === "admin") {
         router.push({
-          pathname: '/login/admin',
+          pathname: "/login/admin",
           params: {
             phone,
             name: data.name,
@@ -86,12 +86,12 @@ export default function WelcomeScreen() {
             company: data.company_name,
           },
         });
-      } else if (type === 'conductor') {
+      } else if (type === "conductor") {
         router.push(`/login/conductor?phone=${phone}`);
       }
     } catch (error: any) {
-      Alert.alert('API failed:', error?.message);
-      showSnackbar('Failed to verify number.', 'error');
+      Alert.alert("API failed:", error?.message);
+      showSnackbar("Failed to verify number.", "error");
     }
   };
 
@@ -99,7 +99,7 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flexFull}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
@@ -108,11 +108,13 @@ export default function WelcomeScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Image
-              source={require('../assets/images/welcome.jpg')}
+              source={require("../assets/images/welcome.jpg")}
               style={styles.image}
             />
             <Text style={styles.title}>Welcome to Bus Management</Text>
-            <Text style={styles.subtitle}>Manage your fleet with ease and control</Text>
+            <Text style={styles.subtitle}>
+              Manage your fleet with ease and control
+            </Text>
 
             <TextInput
               label="Enter Mobile Number"
@@ -124,7 +126,11 @@ export default function WelcomeScreen() {
               style={styles.input}
             />
 
-            <Button mode="contained" onPress={handleContinue} style={styles.button}>
+            <Button
+              mode="contained"
+              onPress={handleContinue}
+              style={styles.button}
+            >
               Continue
             </Button>
           </ScrollView>
@@ -152,29 +158,29 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
     backgroundColor: themeColors.background,
   },
   image: {
-    width: '100%',
+    width: "100%",
     height: 350,
     top: 50,
-    resizeMode: 'contain',
-    alignSelf: 'center',
+    resizeMode: "contain",
+    alignSelf: "center",
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginVertical: 20,
-    color: 'lightgray',
-    textAlign: 'center',
+    color: "lightgray",
+    textAlign: "center",
   },
   subtitle: {
     fontSize: 14,
-    color: 'gray',
+    color: "gray",
     marginBottom: 10,
-    textAlign: 'center',
+    textAlign: "center",
   },
   input: {
     backgroundColor: themeColors.background,

@@ -8,26 +8,28 @@ import {
   Keyboard,
   ScrollView,
   StyleSheet,
-} from 'react-native';
-import { TextInput, Button } from 'react-native-paper';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { themeColors } from '../../app/theme/colors';
-import { BASE_URL } from '../../app/constants/baseURL';
-import CustomSnackbar from '../../app/constants/CustomSnackbar';
-import { routes } from '../_layout';
+} from "react-native";
+import { TextInput, Button } from "react-native-paper";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { themeColors } from "../../app/theme/colors";
+import { BASE_URL } from "../../app/constants/baseURL";
+import CustomSnackbar from "../../app/constants/CustomSnackbar";
+import { routes } from "../_layout";
 
 export default function ConductorLoginScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams();
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [snackbarMsg, setSnackbarMsg] = useState('');
-  const [snackbarType, setSnackbarType] = useState<'success' | 'error'>('success');
+  const [snackbarMsg, setSnackbarMsg] = useState("");
+  const [snackbarType, setSnackbarType] = useState<"success" | "error">(
+    "success"
+  );
 
-  const showSnackbar = (msg: string, type: 'success' | 'error' = 'success') => {
+  const showSnackbar = (msg: string, type: "success" | "error" = "success") => {
     setSnackbarMsg(msg);
     setSnackbarType(type);
     setSnackbarVisible(true);
@@ -35,68 +37,74 @@ export default function ConductorLoginScreen() {
   };
 
   const handleLogin = async () => {
-  if (!password) {
-    showSnackbar('Please enter password', 'error');
-    return;
-  }
-
-  try {
-    const res = await axios.post(`${BASE_URL}/api/conductor/login?number=${phone}`, {
-      password: password,
-    });
-
-    if (!res.data?.token || !res.data?.conductor) {
-      throw new Error('Invalid response from server');
+    if (!password) {
+      showSnackbar("Please enter password", "error");
+      return;
     }
 
-    const { token, conductor } = res.data;
+    try {
+      const res = await axios.post(
+        `${BASE_URL}/api/conductor/login?number=${phone}`,
+        {
+          password: password,
+        }
+      );
 
-    // ✅ Clear previous AsyncStorage
-    await AsyncStorage.clear();
+      if (!res.data?.token || !res.data?.conductor) {
+        throw new Error("Invalid response from server");
+      }
 
-    // ✅ Store fresh data
-    await AsyncStorage.setItem('token', token);
-    await AsyncStorage.setItem('conductor', JSON.stringify(conductor));
-    await AsyncStorage.setItem('company_name', conductor.company_name || '');
+      const { token, conductor } = res.data;
 
-    showSnackbar('Login Successful', 'success');
+      // ✅ Clear previous AsyncStorage
+      await AsyncStorage.clear();
 
-    setTimeout(() => {
-      router.push({
-        pathname: routes.conductorDashboard,
-        params: {
-          id: conductor.id,
-          name: conductor.name,
-          number: conductor.number,
-          busname: conductor.busname,
-          busnumber: conductor.busnumber,
-          path_id: conductor.path,
-          route_name: conductor.route_name,
-          company_name: conductor.company_name,
-          logo: conductor.logo,
-        },
-      });
-    }, 1000);
-  } catch (err: any) {
-    const msg = err.response?.data?.message || 'Login failed';
-    showSnackbar(msg, 'error');
-  }
-};
+      // ✅ Store fresh data
+      await AsyncStorage.setItem("token", token);
+      await AsyncStorage.setItem("type", "conductor");
+      await AsyncStorage.setItem("conductor", JSON.stringify(conductor)); // 👈 SAVE full object
+      await AsyncStorage.setItem("conductor", JSON.stringify(conductor));
+      await AsyncStorage.setItem("company_name", conductor.company_name || "");
 
+      showSnackbar("Login Successful", "success");
 
+      setTimeout(() => {
+        router.push({
+          pathname: routes.conductorDashboard,
+          params: {
+            id: conductor.id,
+            name: conductor.name,
+            number: conductor.number,
+            busname: conductor.busname,
+            busnumber: conductor.busnumber,
+            path_id: conductor.path,
+            route_name: conductor.route_name,
+            company_name: conductor.company_name,
+            logo: conductor.logo,
+          },
+        });
+      }, 1000);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Login failed";
+      console.log(msg);
+      showSnackbar(msg, "error");
+    }
+  };
 
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flexFull}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView
             style={styles.flexFull}
             contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled">
+            keyboardShouldPersistTaps="handled"
+          >
             <Image
-              source={require('../../assets/images/conductor.jpg')}
+              source={require("../../assets/images/conductor.jpg")}
               style={styles.image}
             />
             <Text style={styles.title}>Conductor Portal</Text>
@@ -115,7 +123,11 @@ export default function ConductorLoginScreen() {
               mode="outlined"
               style={styles.input}
             />
-            <Button mode="contained" onPress={handleLogin} style={styles.button}>
+            <Button
+              mode="contained"
+              onPress={handleLogin}
+              style={styles.button}
+            >
               Login
             </Button>
           </ScrollView>
@@ -142,24 +154,24 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
     padding: 20,
     backgroundColor: themeColors.background,
   },
   image: {
-    width: '100%',
+    width: "100%",
     height: 350,
-    resizeMode: 'cover',
-    alignSelf: 'center',
+    resizeMode: "cover",
+    alignSelf: "center",
     borderRadius: 20,
     marginBottom: 10,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     marginVertical: 20,
-    textAlign: 'center',
-    color: 'black',
+    textAlign: "center",
+    color: "black",
   },
   input: {
     marginTop: 10,
