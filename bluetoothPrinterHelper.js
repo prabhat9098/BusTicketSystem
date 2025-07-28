@@ -1,13 +1,11 @@
-import { Alert, PermissionsAndroid, Platform } from "react-native";
+import { PermissionsAndroid, Platform } from "react-native";
 import {
   BluetoothEscposPrinter,
   BluetoothManager,
 } from "react-native-bluetooth-escpos-printer";
 
-import { ImageEditor } from "react-native";
-import { Image } from "react-native";
-import * as FileSystem from 'expo-file-system';
 import { Asset } from "expo-asset";
+import * as FileSystem from "expo-file-system";
 
 export const getBase64FromImage = async (imageAsset) => {
   const asset = Asset.fromModule(imageAsset);
@@ -26,9 +24,6 @@ export const getBase64FromImage = async (imageAsset) => {
   return base64;
 };
 
-
-
-
 export const requestBluetoothPermissions = async () => {
   if (Platform.OS === "android") {
     const granted = await PermissionsAndroid.requestMultiple([
@@ -44,8 +39,15 @@ export const requestBluetoothPermissions = async () => {
 };
 
 export const scanDevices = async () => {
-  const enabled = await BluetoothManager.isBluetoothEnabled();
-  if (!enabled) throw new Error("Bluetooth is disabled");
+  let enabled = await BluetoothManager.isBluetoothEnabled();
+  if (!enabled) {
+    const enabledDevices = await BluetoothManager.enableBluetooth();
+    if (enabledDevices) {
+      enabled = true;
+    } else {
+      throw new Error("Bluetooth could not be enabled");
+    }
+  }
 
   const result = await BluetoothManager.scanDevices();
   const parsed = JSON.parse(result);
@@ -59,11 +61,6 @@ export const connectToPrinter = async (macAddress) => {
 export const printTextToPrinter = async (text) => {
   await BluetoothEscposPrinter.printText(text + "\r\n\r\n", {});
 };
-
-
-
-
-
 
 // import { PermissionsAndroid, Platform } from "react-native";
 // import {
@@ -113,7 +110,6 @@ export const printTextToPrinter = async (text) => {
 //     }
 //   );
 // };
-
 
 // export const scanDevices = () => {
 //     // setLoading(true); // ✅ Start loading spinner

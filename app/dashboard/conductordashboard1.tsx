@@ -6,16 +6,16 @@ import axios from "axios";
 import { router } from "expo-router";
 import moment from "moment";
 import React, { useEffect, useState } from "react";
+//@ts-ignore
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 //@ts-ignore
-import { BluetoothEscposPrinter as ThermalPrinter } from 'react-native-bluetooth-escpos-printer';
+import { BluetoothEscposPrinter as ThermalPrinter } from "react-native-bluetooth-escpos-printer";
 
 import {
   Alert,
   BackHandler,
   FlatList,
   Modal,
-  Image,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -25,20 +25,16 @@ import {
   View,
 } from "react-native";
 import { Appbar, Avatar, Button, Divider, TextInput } from "react-native-paper";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { getStatusBarHeight } from "react-native-status-bar-height";
 import {
   connectToPrinter,
-  printTextToPrinter,
   requestBluetoothPermissions,
   scanDevices,
-  getBase64FromImage
 } from "../../bluetoothPrinterHelper";
 import { BASE_URL } from "../constants/baseURL";
-import { SafeAreaView } from "react-native-safe-area-context";
 //@ts-ignore
-import IMG1 from "../../assets/images/IMG1.jpeg";
 //@ts-ignore
-import IMG2 from "../../assets/images/IMG2.jpeg";
 
 export default function ConductorDashboard() {
   const navigation = useNavigation();
@@ -99,10 +95,11 @@ export default function ConductorDashboard() {
 
     const calculatedGst = finalFare * 0.05;
     const totalWithGst = finalFare + calculatedGst + luggageFare;
+    const totalWithoutGst = finalFare + luggageFare;
 
     setBaseFare(finalFare);
     setGst(calculatedGst);
-    setTotal(totalWithGst);
+    setTotal(totalWithoutGst);
   };
 
   useEffect(() => {
@@ -293,41 +290,62 @@ export default function ConductorDashboard() {
     }
   };
 
- const handlePrint = async () => {
-  if (!fare || !total) return Alert.alert("Error", "Calculate fare first");
+  // reset form
+  const resetForm = () => {
+    console.log("Resetting form...");
+    setFrom("");
+    setTo("");
+    setFilteredToPoints([]);
+    setPassengerCount(1);
+    setFare(null);
+    setBaseFare(0);
+    setGstFare(null);
+    setNumber("");
+    setLuggage("");
+    setDiscount("");
+    setGst(0);
+    setTotal(0);
+    // Keep reverse as is, do not reset
+  };
 
-  const printerToUse = selectedPrinter;
-  if (!printerToUse) {
-    return Alert.alert("No Printer Selected", "Please select a printer first.");
-  }
+  const handlePrint = async () => {
+    if (!fare || !total) return Alert.alert("Error", "Calculate fare first");
 
-  try {
-    const granted = await requestBluetoothPermissions();
-    if (!granted) throw new Error("Bluetooth permission denied");
-
-    await connectToPrinter(printerToUse.address);
-
-    const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
-    const gstAmount = fare * 0.05;
-    const cgst = (fare * 0.025).toFixed(2);
-    const igst = (fare * 0.025).toFixed(2);
-    const luggageValue = parseFloat(luggage || "0");
-    const discountValue = parseFloat(discount || "0");
-
-    // Set GST and Logo Based on Company
-    let gstNumber = "";
-    // let logoImagePath = null;
-
-    if (companyName === "Trisojoyee") {
-      gstNumber = "19ANUPC9666P1ZQ";
-      // logoImagePath = IMG2;
-    } else if (companyName === "Pratima") {
-      gstNumber = "19BSDPD3896H1Z";
-      // logoImagePath = IMG1;
+    const printerToUse = selectedPrinter;
+    if (!printerToUse) {
+      return Alert.alert(
+        "No Printer Selected",
+        "Please select a printer first."
+      );
     }
 
-    // Convert image to base64 and print logo (DISABLED)
-    /*
+    try {
+      const granted = await requestBluetoothPermissions();
+      if (!granted) throw new Error("Bluetooth permission denied");
+
+      await connectToPrinter(printerToUse.address);
+
+      const ticketNumber = `TID-${Math.floor(100000 + Math.random() * 900000)}`;
+      const gstAmount = fare * 0.05;
+      const cgst = (fare * 0.025).toFixed(2);
+      const igst = (fare * 0.025).toFixed(2);
+      const luggageValue = parseFloat(luggage || "0");
+      const discountValue = parseFloat(discount || "0");
+
+      // Set GST and Logo Based on Company
+      let gstNumber = "";
+      // let logoImagePath = null;
+
+      if (companyName === "Trisojoyee") {
+        gstNumber = "19ANUPC9666P1ZQ";
+        // logoImagePath = IMG2;
+      } else if (companyName === "Pratima") {
+        gstNumber = "19BSDPD3896H1Z";
+        // logoImagePath = IMG1;
+      }
+
+      // Convert image to base64 and print logo (DISABLED)
+      /*
     const logoBase64 = await getBase64FromImage(logoImagePath);
     await ThermalPrinter.printImageBase64(logoBase64, {
       width: 250,
@@ -335,10 +353,9 @@ export default function ConductorDashboard() {
     });
     */
 
-    const ticketText = `
+      const ticketText = `
       ${companyName} Bus Service
-      GSTIN: ${gstNumber}
-      -----------------------------
+      ---------------------
       Ticket #: ${ticketNumber}
       Bus No: ${conductor?.busnumber}
       From: ${from}
@@ -346,24 +363,25 @@ export default function ConductorDashboard() {
       Passengers: ${passengerCount}
       Mobile: ${number}
       Fare: Rs.${fare}
-      CGST (2.5%): Rs.${cgst}
-      IGST (2.5%): Rs.${igst}
       ${luggageValue > 0 ? `Luggage: Rs.${luggageValue.toFixed(2)}\n` : ""}
       ${discountValue > 0 ? `Discount: Rs.${discountValue.toFixed(2)}\n` : ""}
       Total: Rs.${total.toFixed(2)}
       Time: ${currentTime}
-      -----------------------------
+      ---------------------
       Thank You & Happy Journey!
+
+      
+      See you soon!
     `;
 
-    // Fire API in background
-    (async () => {
-      try {
-        const token = await AsyncStorage.getItem("token");
+      // Fire API in background
+      (async () => {
+        try {
+          const token = await AsyncStorage.getItem("token");
 
-        const response = await axios.post(
-          `${BASE_URL}/api/pdf/generate-ticket`,
-          {
+          const response = await axios.post(
+            `${BASE_URL}/api/pdf/generate-ticket`,
+            {
               company_name: companyName,
               bus_no: conductor?.busnumber || "",
               ticket_no: ticketNumber,
@@ -377,75 +395,34 @@ export default function ConductorDashboard() {
               total: total.toFixed(2),
               conductor_id: conductor?.id || "", // adjust key if different
             },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
 
-        console.log("API Ticket Response:", response.data);
-      } catch (err) {
-        console.error("API Ticket Error:", err.message || err);
-      }
-    })();
-    
+          console.log("API Ticket Response:", response.data);
+        } catch (err: any) {
+          console.error("API Ticket Error:", err.message || err);
+        }
+      })();
 
-    await ThermalPrinter.printText(ticketText, {
-      fontSize: 20,
-      alignment: "left",
-    });
+      await ThermalPrinter.printText(ticketText, {
+        fontSize: 18,
+        alignment: "left",
+      });
 
-    
+      // await ThermalPrinter.printNewLine();
 
-    await ThermalPrinter.printNewLine();
-
-    // Reset form fields but preserve reverse toggle
-    if (typeof resetForm === "function") {
-    resetForm();
-  } else {
-    console.warn("resetForm is not defined correctly");
-  }
-  } catch (error) {
-    console.error(error);
-    Alert.alert("Print Error", error.message || "Unknown error occurred.");
-  }
-};
-
-
-  const loadBluetoothDevices = async () => {
-    try {
-      setBtLoading(true);
-      const granted = await requestBluetoothPermissions();
-      if (!granted) throw new Error("Bluetooth permission denied");
-
-      const devices = await scanDevices();
-      setBtDevices(devices);
-    } catch (err: any) {
-      Alert.alert("Bluetooth Error", err.message || "Failed to scan devices");
-    } finally {
-      setBtLoading(false);
+      // Reset form fields but preserve reverse toggle
+      resetForm?.();
+    } catch (error: any) {
+      console.error(error);
+      Alert.alert("Print Error", error || "Unknown error occurred.");
     }
   };
-
- const resetForm = () => {
-  console.log("Resetting form...");
-  setFrom("");
-  setTo("");
-  setFilteredToPoints([]);
-  setPassengerCount(1);
-  setFare(null);
-  setBaseFare(0);
-  setGstFare(null);
-  setNumber("");
-  setLuggage("");
-  setDiscount("");
-  setGst(0);
-  setTotal(0);
-  // Keep reverse as is, do not reset
-};
-
 
   const clearSelections = () => {
     setFrom("");
@@ -461,203 +438,211 @@ export default function ConductorDashboard() {
 
   return (
     <>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle="dark-content"
-      />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle="dark-content"
+        />
+
         <Appbar.Header
           style={{
-            paddingTop: statusBarHeight,
             backgroundColor: "white",
-            elevation: 4, // adds shadow on Android
-            shadowColor: "#000", // for iOS shadow
-            alignItems: "center",
-            top: -20,
+            elevation: 0,
+            // shadowColor: "#000",
+            height: 70,
           }}
         >
           <Appbar.Action
             icon="power"
-            size={36}
+            size={28}
             onPress={() => confirmLogout()}
           />
 
-          <Appbar.Content
-            title={`${companyName} Bus Service`}
-            titleStyle={{
-              textAlign: "center",
-              fontSize: 18,
-              fontWeight: "bold",
-            }}
-            style={{ alignItems: "center" }} // ensures title is centered
-          />
-
-          <Appbar.Action icon="account-circle" size={36} />
-        </Appbar.Header>
-      </SafeAreaView>
-
-      <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          <Avatar.Text label={conductor?.name?.[0] || "?"} size={48} />
-          <View style={{ marginLeft: 12 }}>
-            <Text style={styles.welcome}>Welcome, {conductor?.name}</Text>
-            <Text style={styles.subtitle}>{currentTime}</Text>
-          </View>
-        </View>
-
-        {/* ✅ Assigned Route Display */}
-        {conductor?.route_name && (
-          <View style={{ alignItems: "center", paddingHorizontal: 16 }}>
+          {/* Centered Title */}
+          <View
+            style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+          >
             <Text
-              style={styles.routeText}
-              numberOfLines={2}
-              ellipsizeMode="tail"
+              style={{ fontSize: 18, fontWeight: "bold", textAlign: "center" }}
             >
-              Assigned Route: {conductor.route_name}
+              {`${companyName} Bus Service`}
             </Text>
           </View>
-        )}
 
-        {/* From */}
-        <TouchableOpacity
-          style={styles.inputBox}
-          onPress={() => setFromModalVisible(true)}
+          <Appbar.Action icon="account-circle" size={28} />
+        </Appbar.Header>
+        <View style={{ height: 1, backgroundColor: "#ddd" }} />
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={{ paddingBottom: 50 }}
         >
-          <Text style={{ color: from ? "#000" : "#888" }}>
-            {from ? `From: ${from}` : "Select From"}
-          </Text>
-          {from ? (
-            <Ionicons
-              name="close-circle"
-              size={20}
-              onPress={() => setFrom("")}
+          <View style={styles.header}>
+            <Avatar.Text label={conductor?.name?.[0] || "?"} size={48} />
+            <View style={{ marginLeft: 12 }}>
+              <Text style={styles.welcome}>Welcome, {conductor?.name}</Text>
+              <Text style={styles.subtitle}>{currentTime}</Text>
+            </View>
+          </View>
+
+          {conductor?.route_name && (
+            <View style={{ alignItems: "center", paddingHorizontal: 16 }}>
+              <Text
+                style={styles.routeText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                Assigned Route: {conductor.route_name}
+              </Text>
+            </View>
+          )}
+
+          {/* From */}
+          <TouchableOpacity
+            style={styles.inputBox}
+            onPress={() => setFromModalVisible(true)}
+          >
+            <Text style={{ color: from ? "#000" : "#888" }}>
+              {from ? `From: ${from}` : "Select From"}
+            </Text>
+            {from ? (
+              <Ionicons
+                name="close-circle"
+                size={20}
+                onPress={() => setFrom("")}
+              />
+            ) : null}
+          </TouchableOpacity>
+
+          {/* To */}
+          <TouchableOpacity
+            style={styles.inputBox}
+            onPress={() => setToModalVisible(true)}
+          >
+            <Text style={{ color: to ? "#000" : "#888" }}>
+              {to ? `To: ${to}` : "Select To"}
+            </Text>
+            {to ? (
+              <Ionicons
+                name="close-circle"
+                size={20}
+                onPress={() => setTo("")}
+              />
+            ) : null}
+          </TouchableOpacity>
+
+          <Button
+            icon="repeat"
+            mode="contained"
+            style={[
+              styles.btn,
+              { backgroundColor: reverse ? "#199387ff" : "#1976d2" },
+            ]}
+            onPress={onReverse}
+          >
+            Reverse Route
+          </Button>
+
+          <View style={styles.counterRow}>
+            <Button
+              icon="minus"
+              mode="outlined"
+              onPress={() => setPassengerCount(Math.max(1, passengerCount - 1))}
             />
-          ) : null}
-        </TouchableOpacity>
+            <Text style={styles.count}>{passengerCount}</Text>
+            <Button
+              icon="plus"
+              mode="outlined"
+              onPress={() => setPassengerCount(passengerCount + 1)}
+            />
+          </View>
 
-        {/* To */}
-        <TouchableOpacity
-          style={styles.inputBox}
-          onPress={() => setToModalVisible(true)}
-        >
-          <Text style={{ color: to ? "#000" : "#888" }}>
-            {to ? `To: ${to}` : "Select To"}
-          </Text>
-          {to ? (
-            <Ionicons name="close-circle" size={20} onPress={() => setTo("")} />
-          ) : null}
-        </TouchableOpacity>
-
-        <Button
-          icon="repeat"
-          mode="contained"
-          style={[
-            styles.btn,
-            { backgroundColor: reverse ? "#199387ff" : "#1976d2" },
-          ]}
-          onPress={onReverse}
-        >
-          Reverse Route
-        </Button>
-
-        <View style={styles.counterRow}>
-          <Button
-            icon="minus"
-            mode="outlined"
-            onPress={() => setPassengerCount(Math.max(1, passengerCount - 1))}
-          />
-          <Text style={styles.count}>{passengerCount}</Text>
-          <Button
-            icon="plus"
-            mode="outlined"
-            onPress={() => setPassengerCount(passengerCount + 1)}
-          />
-        </View>
-
-        {/* Discount */}
-        <TextInput
-          style={styles.input}
-          mode="outlined"
-          label="Mobile Number"
-          keyboardType="numeric"
-          value={number}
-          onChangeText={setNumber}
-        />
-
-        <View style={{ flexDirection: "row", gap: 8 }}>
           {/* Discount */}
           <TextInput
-            style={{ flex: 1 }}
+            style={styles.input}
             mode="outlined"
-            label="Discount (optional)"
+            label="Mobile Number"
             keyboardType="numeric"
-            value={discount}
-            onChangeText={setDiscount}
+            value={number}
+            onChangeText={setNumber}
           />
 
-          {/* Luggage */}
-          <TextInput
-            style={{ flex: 1 }}
-            mode="outlined"
-            label="Luggage Amount (optional)"
-            keyboardType="numeric"
-            value={luggage}
-            onChangeText={setLuggage}
-          />
-        </View>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            {/* Discount */}
+            <TextInput
+              style={{ flex: 1 }}
+              mode="outlined"
+              label="Discount (optional)"
+              keyboardType="numeric"
+              value={discount}
+              onChangeText={setDiscount}
+            />
 
-        <Button mode="contained" style={styles.btn} onPress={calculateFare}>
-          Calculate Fare
-        </Button>
+            {/* Luggage */}
+            <TextInput
+              style={{ flex: 1 }}
+              mode="outlined"
+              label="Luggage Amount (optional)"
+              keyboardType="numeric"
+              value={luggage}
+              onChangeText={setLuggage}
+            />
+          </View>
 
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            marginVertical: 8,
-          }}
-        >
-          <Text style={styles.breakdown}>
-            Base Fare: ₹ {baseFare.toFixed(2)}
-          </Text>
-          <Text style={styles.breakdown}>GST (5%): ₹ {gst.toFixed(2)}</Text>
-          <Text style={styles.breakdown}>
-            Luggage: ₹ {parseFloat(luggage || 0).toFixed(2)}
-          </Text>
-        </View>
+          <Button mode="contained" style={styles.btn} onPress={calculateFare}>
+            Calculate Fare
+          </Button>
 
-        <Text style={styles.total}>Total Fare: ₹ {total.toFixed(2)}</Text>
-
-        <Button
-          icon="bluetooth"
-          mode="outlined"
-          onPress={() => setBtModalVisible(true)}
-          style={styles.btn}
-        >
-          Select Bluetooth Printer
-        </Button>
-
-        {selectedPrinter?.name && (
-          <Text
-            style={{ textAlign: "center", color: "#2e7d32", marginBottom: 10 }}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              marginVertical: 8,
+            }}
           >
-            Selected Printer: {selectedPrinter.name}
-          </Text>
-        )}
+            <Text style={styles.breakdown}>
+              Base Fare: ₹ {baseFare.toFixed(2)}
+            </Text>
+            <Text style={styles.breakdown}>
+              Luggage: ₹ {parseFloat(luggage || 0).toFixed(2)}
+            </Text>
+          </View>
 
-        <Button
-          mode="contained"
-          style={styles.btn}
-          onPress={handlePrint}
-          icon={({ size, color }) => (
-            <Icon name="printer" size={30} color={color} /> // Change size here
+          <Text style={styles.total}>Total Fare: ₹ {total.toFixed(2)}</Text>
+
+          <Button
+            icon="bluetooth"
+            mode="outlined"
+            onPress={() => setBtModalVisible(true)}
+            style={styles.btn}
+          >
+            Select Bluetooth Printer
+          </Button>
+
+          {selectedPrinter?.name && (
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#2e7d32",
+                marginBottom: 10,
+              }}
+            >
+              Selected Printer: {selectedPrinter.name}
+            </Text>
           )}
-        >
-          Print Ticket
-        </Button>
-      </ScrollView>
 
+          <Button
+            mode="contained"
+            style={styles.btn}
+            onPress={handlePrint}
+            icon={({ size, color }) => (
+              <Icon name="printer" size={30} color={color} />
+            )}
+          >
+            Print Ticket
+          </Button>
+        </ScrollView>
+      </SafeAreaView>
       {/* From Modal */}
       <Modal
         visible={fromModalVisible}
@@ -772,15 +757,23 @@ export default function ConductorDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16, bottom: 15 },
-  headerText: {
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 10,
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    padding: 16,
   },
-  header: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
-  welcome: { fontSize: 18, fontWeight: "bold" },
-  subtitle: { color: "gray" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  welcome: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  subtitle: {
+    color: "gray",
+  },
   inputBox: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -790,37 +783,38 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 5,
   },
-  btn: { marginVertical: 8 },
+  btn: {
+    marginVertical: 8,
+  },
   counterRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginVertical: 10,
   },
-  count: { marginHorizontal: 20, fontSize: 18 },
+  count: {
+    marginHorizontal: 20,
+    fontSize: 18,
+  },
   total: {
     fontSize: 18,
     textAlign: "center",
     color: "#2e7d32",
     marginVertical: 10,
   },
-  fareBox: {
-    backgroundColor: "#f0f4ff",
-    padding: 12,
-    marginVertical: 10,
-    borderRadius: 8,
-  },
-  label: {
+  breakdown: {
     fontSize: 16,
-    marginBottom: 4,
-  },
-  labelBold: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 8,
+    fontWeight: "500",
   },
   input: {
     marginBottom: 10,
+  },
+  routeText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
   },
 
   modalOverlay: {
@@ -839,13 +833,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
-    textAlign: "center",
-  },
-  routeText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 10,
     textAlign: "center",
   },
   modalHeader: {
